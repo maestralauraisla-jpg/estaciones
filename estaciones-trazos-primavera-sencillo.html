@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estaciones: repasa y une</title>
+<style>
+:root{--ink:#263238;--soft:#eef4f6;--line:#c8d1d5;--green:#2e7d55;--red:#b23b3b}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6f5;color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+main{max-width:1000px;margin:auto;padding:14px}
+header,.board{background:#fff;border:1px solid #dce3e5;border-radius:16px;padding:15px;margin-bottom:12px}
+header{text-align:center}h1{font-size:clamp(1.35rem,4vw,2rem);margin:0 0 8px}header p{margin:0}
+.instructions{text-align:center;background:var(--soft);border-radius:10px;padding:11px;font-weight:bold;margin-bottom:12px}
+.rows{display:flex;flex-direction:column;gap:12px}
+.row{display:grid;grid-template-columns:100px minmax(170px,1fr) 100px;gap:10px;align-items:center;border:1px solid #e0e5e7;border-radius:13px;padding:8px;background:#fff;min-height:132px}
+.item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center}
+.item img{width:70px;height:70px;object-fit:contain}.item strong{font-size:1rem}
+.path-wrap{width:100%;height:108px;position:relative;touch-action:none;overflow:hidden;border-radius:10px;background:#fcfcfc}
+svg.path{width:100%;height:100%;display:block;overflow:visible}
+.guide{fill:none;stroke:#7f8c91;stroke-width:3;stroke-dasharray:7 7;stroke-linecap:round;stroke-linejoin:round}
+.userline{fill:none;stroke:#2d83c5;stroke-width:6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.path-wrap.done{outline:3px solid #5ca77b}.path-wrap.wrong{outline:3px solid #d86a6a}
+.feedback{text-align:center;font-weight:bold;min-height:1.5em;margin:12px 0 0}
+.controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+button{border:0;border-radius:10px;padding:11px 15px;background:#e7edf0;color:#263943;font-size:.95rem;font-weight:bold;cursor:pointer}
+button.primary{background:#315d76;color:white}
+.note{text-align:center;color:#5d696e;font-size:.8rem;line-height:1.4;margin:12px 0 0}
+@media(max-width:560px){main{padding:7px}.board,header{padding:8px}.row{grid-template-columns:68px minmax(100px,1fr) 68px;gap:4px;padding:5px;min-height:110px}.item img{width:53px;height:53px}.item strong{font-size:.78rem}.path-wrap{height:90px}.guide{stroke-width:3}.userline{stroke-width:5}}
+@media print{.controls{display:none}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Repasa los trazos de las estaciones</h1><p>Une cada estación con su pictograma siguiendo el camino.</p></header>
+<section class="board">
+<div class="instructions">1. Repasa la línea de puntos. 2. ¡La actividad comprueba si has seguido el camino!</div>
+<div class="rows" id="rows"></div>
+<div class="feedback" id="feedback" aria-live="polite">¡Elige un camino y repásalo!</div>
+<div class="controls"><button id="reset">Volver a empezar</button><button class="primary" id="check">Corregir actividad</button></div>
+<p class="note">Los pictogramas se cargan desde ARASAAC y necesitan conexión a internet. Pictogramas ARASAAC, licencia CC BY-NC-SA.</p>
+</section>
+</main>
+<script>
+const pairs=[
+ {name:"Otoño",term:"otoño",target:"Calabaza",targetTerm:"calabaza",kind:"curve"},
+ {name:"Primavera",term:"primavera",target:"Flor",targetTerm:"flor",kind:"spiral"},
+ {name:"Verano",term:"verano",target:"Calor",targetTerm:"calor",kind:"triangles"},
+ {name:"Invierno",term:"invierno",target:"Nieve",targetTerm:"nieve",kind:"waves"}
+];
+const rows=document.getElementById("rows"), records=[];
+function loadPicto(img,term){
+ img.alt="Pictograma ARASAAC: "+term;
+ fetch("https://api.arasaac.org/api/pictograms/es/bestsearch/"+encodeURIComponent(term))
+ .then(r=>{if(!r.ok)throw Error();return r.json()})
+ .then(list=>{
+   if(!Array.isArray(list)||!list.length)throw Error();
+   const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+   const p=list.find(x=>(x.keywords||[]).some(k=>norm(typeof k==="string"?k:k.keyword)===norm(term)))||list[0];
+   const id=p._id||p.id;if(!id)throw Error();
+   img.src=`https://static.arasaac.org/pictograms/${id}/${id}_500.png`;
+ }).catch(()=>{img.style.display="none";});
+}
+function item(label,term){const d=document.createElement("div");d.className="item";const img=document.createElement("img");loadPicto(img,term);const t=document.createElement("strong");t.textContent=label;d.append(img,t);return d}
+function makePath(kind){
+ if(kind==="curve")return "M 8 54 C 25 5, 42 100, 62 52 S 95 8, 115 54 S 150 100, 170 52 S 205 8, 225 54 S 260 100, 280 52 S 315 8, 335 54 S 370 100, 392 52";
+ if(kind==="spiral")return "M 8 54 C 35 20, 75 20, 102 54 S 170 88, 197 54 S 265 20, 292 54 S 360 88, 392 54";
+ if(kind==="triangles")return "M 8 54 L 28 20 L 48 54 L 68 20 L 88 54 L 108 20 L 128 54 L 148 20 L 168 54 L 188 20 L 208 54 L 228 20 L 248 54 L 268 20 L 288 54 L 308 20 L 328 54 L 348 20 L 368 54 L 392 20";
+ return "M 8 54 C 25 20, 45 20, 62 54 S 100 88, 117 54 S 155 20, 172 54 S 210 88, 227 54 S 265 20, 282 54 S 320 88, 337 54 S 375 20, 392 54";
+}
+pairs.forEach((p,i)=>{
+ const row=document.createElement("div");row.className="row";
+ row.append(item(p.name,p.term));
+ const wrap=document.createElement("div");wrap.className="path-wrap";wrap.dataset.index=i;
+ const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("class","path");svg.setAttribute("viewBox","0 0 400 108");svg.setAttribute("preserveAspectRatio","none");
+ const guide=document.createElementNS(svg.namespaceURI,"path");guide.setAttribute("class","guide");guide.setAttribute("d",makePath(p.kind));guide.setAttribute("transform","translate(0 0)");
+ const ink=document.createElementNS(svg.namespaceURI,"path");ink.setAttribute("class","userline");ink.setAttribute("d","");svg.append(guide,ink);wrap.append(svg);row.append(wrap);row.append(item(p.target,p.targetTerm));rows.append(row);
+ const rec={p,wrap,svg,guide,ink,points:[],drawing:false,passed:false};records.push(rec);
+ function point(e){const r=svg.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*400,y:(e.clientY-r.top)/r.height*108}}
+ function start(e){if(rec.passed)return;rec.drawing=true;rec.points=[];rec.ink.setAttribute("d","");rec.wrap.classList.remove("done","wrong");wrap.setPointerCapture?.(e.pointerId);const q=point(e);rec.points.push(q);rec.ink.setAttribute("d",`M ${q.x} ${q.y}`);e.preventDefault()}
+ function move(e){if(!rec.drawing)return;const q=point(e);rec.points.push(q);rec.ink.setAttribute("d",rec.points.map((pt,j)=>(j?"L":"M")+` ${pt.x} ${pt.y}`).join(" "));e.preventDefault()}
+ function end(){if(!rec.drawing)return;rec.drawing=false;rec.passed=score(rec);rec.wrap.classList.toggle("done",rec.passed);rec.wrap.classList.toggle("wrong",!rec.passed);document.getElementById("feedback").textContent=rec.passed?"¡Muy bien! Has seguido el camino.":"Prueba otra vez: sigue los puntos desde el principio hasta el final."}
+ wrap.addEventListener("pointerdown",start);wrap.addEventListener("pointermove",move);wrap.addEventListener("pointerup",end);wrap.addEventListener("pointercancel",end);
+});
+function score(rec){
+ if(rec.points.length<15)return false;
+ // Acepta el trazo si sigue suficientemente cerca de la línea discontinua a lo largo de la mayor parte del recorrido.
+ const guide=rec.guide, total=guide.getTotalLength();let near=0,seen=0;
+ for(let i=0;i<rec.points.length;i+=Math.max(1,Math.floor(rec.points.length/100))){
+   const p=rec.points[i];let best=Infinity;
+   for(let j=0;j<=100;j++){const q=guide.getPointAtLength(total*j/100);const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<best)best=d}
+   seen++;if(best<13)near++;
+ }
+ const first=rec.points[0],last=rec.points[rec.points.length-1];
+ const a=guide.getPointAtLength(0),b=guide.getPointAtLength(total);
+ const starts=Math.hypot(first.x-a.x,first.y-a.y)<35;
+ const ends=Math.hypot(last.x-b.x,last.y-b.y)<35;
+ return near/seen>.68 && starts && ends;
+}
+document.getElementById("check").addEventListener("click",()=>{
+ const ok=records.filter(r=>r.passed).length;
+ document.getElementById("feedback").textContent=ok===records.length?"¡Excelente! Has repasado los cuatro caminos correctamente.":`Has completado ${ok} de ${records.length} caminos. Repasa los que tienen el borde rojo y vuelve a intentarlo.`;
+});
+document.getElementById("reset").addEventListener("click",()=>{
+ records.forEach(r=>{r.points=[];r.drawing=false;r.passed=false;r.ink.setAttribute("d","");r.wrap.classList.remove("done","wrong")});
+ document.getElementById("feedback").textContent="¡Elige un camino y repásalo!";
+});
+</script>
+</body>
+</html>
